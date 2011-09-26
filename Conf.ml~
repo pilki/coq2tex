@@ -1,0 +1,10 @@
+(* configuration module *)
+
+let prefix = "\\c2l"
+let pref s = prefix ^ s
+
+let keyword_cmd = pref "keyword"
+let defined_cmd = pref "defined"
+let space_cmd = pref "space"
+let newline_cmd = "\\"
+

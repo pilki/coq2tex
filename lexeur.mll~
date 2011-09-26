@@ -1,0 +1,41 @@
+{
+
+  open Printf
+  open Lexing
+
+  let is_among words =
+    Hashtbl.mem (
+      let table = Hashtbl.create 97 in
+      List.iter (fun word -> Hashtbl.add table word ()) words;
+      table
+    )
+
+  (* Keyword recognition. *)
+
+  let is_keyword = 
+    is_among [ 
+      "fun"; "match"; "with"; "begin"; "end"; 
+      "try"; "raise"; "as"; "let"; "rec"; "in";
+      "function"; "if"; "then"; "else"; 
+      "while"; "do"; "done"; "and";
+      "val"; "type"; "exception";
+      "module"; "struct"; "sig";
+      "case"; "of"; "fail"; "assert";
+      (* paper-specific keywords follow *)
+      "hide"; "outside"; "fate"; "cap"; "got";
+      "unpack"; "pack"; "exploit"; "set"; "make";
+      "logic"; "property";
+    ]
+
+  (* TeX macro recognition. *)
+
+  let is_greek = 
+    is_among [ 
+      "alpha"; "beta"; "gamma"; "delta"; "epsilon"; "eta"; "lambda"; "mu";
+      "rho"; "sigma"; "tau"; "theta"; "phi"; "varphi"; "psi";
+      "forall"; "exists"; "bot"; "varempty";
+      (* paper-specific macros follow *)
+      "Kval"; "Ksng"; "Kcap"; "Kdupcap"; "Kgrp"; "zed"; "enn"; "Vf";
+      "ordhsub"; "ordhnsub"; "dom"; "codom"; "mapsto"; "notin"
+    ]
+

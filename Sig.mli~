@@ -1,0 +1,2 @@
+module type OUTCHAN = sig
+  val out: out_channel
