@@ -1,46 +1,67 @@
 open Sig
 open Printf
 
-module Cmd (Out:OUTCHAN) = struct
+let out_channel = ref stdout
 
+let directory_name = ref "XXXXXXXXX DN NOT SET YET XXXXXXXXXXX"
+let file_name = ref "XXXXXXXXX FN NOT SET YET XXXXXXXXXXX"
+let prefix_string = ref "XXXXXXXXX PS NOT SET YET XXXXXXXXXXX"
 
   (* prefix of the form directory/Foo *)
-  let prefix_string = sprintf "%s%c%s%c" Out.directory_name Conf.directory_sep Out.file_name Conf.module_sep
+let set_directory_and_file_name dn fn =
+  directory_name := dn;
+  file_name := fn;
+  prefix_string := sprintf "%s%c%s%c" !directory_name Conf.directory_sep !file_name Conf.module_sep
 
+let modules_list = ref []
 
   (* prefix mod_lst name returns directory/Foo:Mod1:Mod2:name *)
-  let prefix mod_lst =
-    let long_prefix =
-      List.fold_left
-        (fun pref mod_name -> sprintf "%s%c%s" pref Conf.module_sep mod_name)
-        prefix_string mod_lst in
-    fun name ->
-      long_prefix ^ name
+let prefix_aux () =
+  let long_prefix =
+    List.fold_left
+      (fun prefix mod_name -> sprintf "%s%c%s" prefix Conf.module_sep mod_name)
+      !prefix_string (List.rev !modules_list) in
+  fun name ->
+    long_prefix ^ name
+
+let prefix = ref (prefix_aux ())
+
+let enter_module module_name =
+  modules_list := module_name :: !modules_list;
+  prefix := prefix_aux ()
+
+let exit_module module_name =
+  match !modules_list with
+  | [] -> failwith (sprintf "Exit a module (%s), but no module !" module_name)
+  | hd :: tl ->
+      if hd <> module_name then
+        failwith (sprintf "Exit the module %s but was in module %s" module_name hd);
+      modules_list := tl;
+      prefix := prefix_aux ()
 
 
-  let myoutput s = output_string Out.out s
-  let myprintf = fprintf out
+let myoutput s = output_string !out_channel s
+let myprintf = fprintf !out_channel
 
 
-  let space n =
-    for i = 1 to n do
-      myoutput Conf.space_cmd
-    done
+let spaces n =
+  for i = 1 to n do
+    myoutput Conf.space_cmd
+  done
 
-  let newline () =
-    myoutput Conf.newline_cmd
+let newline () =
+  myoutput Conf.newline_cmd
 
-  let keyword s =
-    myprintf "%s{%s}" Conf.keyword_cmd s
+let keyword s =
+  myprintf "%s{%s}" Conf.keyword_cmd s
 
-  let defined s =
-    myprintf "%s{%s}" Conf.defined_cmd s
+let defined s =
+  myprintf "%s{%s}" Conf.defined_cmd s
 
-  let other s =
-    myprintf "%s{%s}" Conf.other_cmd s
+let other s =
+  myprintf "%s{%s}" Conf.other_cmd s
 
-  let indexDef s = myprintf "%s{%s}" Conf.indexDef s
-  let indexSec s = myprintf "%s{%s}" Conf.indexSec s
+let indexDef s = myprintf "%s{%s}" Conf.indexDef s
+let indexSec s = myprintf "%s{%s}" Conf.indexSec s
 
 
-end
