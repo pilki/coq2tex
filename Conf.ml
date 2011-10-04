@@ -7,7 +7,8 @@ let keyword_cmd = pref "keyword"
 let defined_cmd = pref "defined"
 let other_cmd = pref "other"
 
-let space_cmd = pref "space"
+(*let space_cmd = pref "space"*)
+let space_cmd = " "
 let newline_cmd = "\\\\\n"
 
 let directory_sep = '/'

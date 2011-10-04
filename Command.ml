@@ -41,7 +41,8 @@ let exit_module module_name =
 
 
 let myoutput s = output_string !out_channel s
-let myprintf = fprintf !out_channel
+let myprintf (*: 'a. ('a, out_channel, unit) format -> 'a *)=
+  fun f -> fprintf !out_channel f
 
 
 let spaces n =
@@ -64,4 +65,9 @@ let other s =
 let indexDef s = myprintf "%s{%s}" Conf.indexDef s
 let indexSec s = myprintf "%s{%s}" Conf.indexSec s
 
+let def_short_name short long =
+  myprintf "Def of short '%s': %s\n" short long
+
+let def_super_short_name short long =
+  myprintf "Def of super short '%s': %s\n" short long
 
