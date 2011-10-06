@@ -163,6 +163,11 @@ and treat_content_def = parse
       if !is_inductive then
         Queue.push tok constructors;
       treat_content_def lexbuf}
+| '|' (spaces_opt as sp) ((ident ('.' ident)+) as tok)
+    { C.normal "|";
+      C.spaces (count_spaces sp);
+      C.normal tok;
+      treat_content_def lexbuf}
 | coq_token as tok
     { C.normal tok;
       treat_content_def lexbuf}
@@ -184,12 +189,14 @@ and treat_content_def = parse
     {elim_comment 1 treat_content_def lexbuf}
 
 and elim_phrase =  parse
-| coq_token 
+| coq_token
     { elim_phrase lexbuf}
 | spaces_opt '\n' spaces_opt
     { elim_phrase lexbuf}
 | spaces
     { elim_phrase lexbuf}
+| "..."
+    { main lexbuf}
 | dot
     { main lexbuf}
 | '.' eof

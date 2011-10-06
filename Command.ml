@@ -43,7 +43,7 @@ let enter_module module_name =
   prefix := prefix_aux ()
 
 let enter_section module_name =
-  Printf.eprintf "Enter section %S\n%!" module_name;
+(*  Printf.eprintf "Enter section %S\n%!" module_name;*)
   modules_list := (module_name, false) :: !modules_list
 
 let exit_module module_name =
