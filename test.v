@@ -1,26 +1,14 @@
-Definition foo coin pan :=
-  blah.coin.
-  Definition foo coin pan :=
-    blah * coin.
+(*Local Hint Unfold satisfy_cmp: pb.
 
-(*c2l* short*)
-Inductive foo bar:Prop :=
-| bar | baz
-|coin: foo.
-
-Record foo :=
-  { bar : int;
-    baz : mlqsdkfj}.
-
-(*c2l* super short: blah*)
-(*c2l* short: blah*)
-Lemma blah: coin.
+Lemma satisfy_cmp_dec: forall z1 comp z2, decidable (satisfy_cmp z1 comp z2).
 Proof.
-sqdfkjh sqdlfkj mlkj/. mlqskdjf . msqldkjf.
-mlqsdkfj .
-Qed.
+  intros z1 comp0 z2.
+  un.
+  destruct comp0. apply zeq. apply Z_ge_dec.
+Qed.*)
 
 
-Notation qmsldfjk .
+Definition satisfy_constr v (constr: constraint) :=
+  satisfy_cmp (constr.(vect) <*> v).
 
-Definition hop:foo.
+ constr.(comp) constr.(val).

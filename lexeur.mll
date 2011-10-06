@@ -2,6 +2,8 @@
 open Printf
 open Lexing
 
+module C = Command
+
 let is_among words =
   Hashtbl.mem (
   let table = Hashtbl.create 97 in
@@ -10,11 +12,14 @@ let is_among words =
  )
 
 let definition_keywords =
-  ["Axiome"; "Parameter"; "Definition"; "Theorem"; "Lemma"; "Remark"; "Fixpoint"; "Function"; "Notation"; "Inductive"; "Record"]
+  ["Axiome"; "Parameter"; "Definition"; "Theorem";
+   "Lemma"; "Remark"; "Fixpoint"; "Function"; "Notation";
+   "Inductive"; "Record"]
 
 let program_str = "Program"
 
-let other_keywords = ["do"; "forall"; "Prop"; "Type"; "Set"; "Next"; "Obligation"; "Qed"; "Program" ]
+let other_keywords = ["do"; "forall"; "Prop"; "Type"; "Set";
+                      "Next"; "Obligation"; "Qed"; "Program" ]
 
     (* Keyword recognition. *)
 
@@ -25,35 +30,16 @@ let is_other_keyword = is_among other_keywords
 let is_keyword =
   is_among (definition_keywords @ other_keywords)
 
-type short_name =
-  | SNNone
-  | SNShort
-  | SNSome of string
-
 let nbr_spaces_to_remove = ref 0
-let current_def = ref ""
-let short_name = ref SNNone
-let super_short_name = ref None
 let is_inductive = ref false
 let constructors = Queue.create ()
 
 let conclude_def () =
-  (match !short_name with
-  | SNNone -> ()
-  | SNShort -> 
-      Command.def_short_name !current_def !current_def
-  | SNSome sn ->
-      Command.def_short_name sn !current_def);
-  (match !super_short_name with
-  | None -> ()
-  | Some ssn ->
-      Command.def_super_short_name ssn !current_def);
-  Queue.iter (fun constr -> Command.myprintf "Constructor %s (see %s)\n"
-                 constr !current_def) constructors;
-  short_name := SNNone;
-  super_short_name := None;
-  is_inductive := false;
-  Queue.clear constructors
+  Queue.iter
+    (fun constr -> C.indexSee constr !C.current_ident)
+    constructors;
+  Queue.clear constructors;
+  C.conclude_def ()
 
 let count_spaces s =
   let c = ref 0 in
@@ -74,11 +60,12 @@ let spaces_opt = space*
 
 let empty_line = space* '\n'
 
+
 let coq_token =
   ([^' ' '\t' '\n' '.' '(' '|'] +)
 | '(' (* to be used where comments are properly delt with *)
 | '|'
-| (['a'-'z' 'A'-'Z' '_' '0' - '9']+ '.' ['a'-'z' 'A'-'Z' '_' '0'-'9']+) (* something with a dot in it *)
+| (['a'-'z' 'A'-'Z' '_' '0' - '9']+ '.' [^ ' ' '\t' 'n']+) (* something with a dot in it *)
 
 let dot = '.' [' ' '\t' '\n']
 
@@ -98,6 +85,9 @@ let start_definition =
 
 let open_command = "(*c2l* "
 
+let dot_return = '.' spaces_opt '\n'
+let dot_eof = '.' spaces_opt eof
+
 let body = _ * '.' (' ' | '\t' | '\n')
 
 (* Regular mode. Read and translate code. *)
@@ -107,16 +97,16 @@ rule main = parse
 | open_command {treat_command lexbuf}
 | "(*" {elim_comment 1 main lexbuf}
 | eof {()}
-| spaces_opt "Module" [^'\n']* ":=" [^'\n']* ".\n"
+| spaces_opt "Module" [^'\n']* ":=" [^'\n']* dot_return
     {main lexbuf}
-| spaces_opt "Module" (coq_token as tok) [^'\n' '.']* ".\n"
-    { Command.enter_module tok;
+| spaces_opt "Module" (coq_token as tok) [^'\n' '.']* dot_return
+    { C.enter_module tok;
       main lexbuf}
-| spaces_opt "Section" (coq_token as tok) spaces_opt ".\n"
-    { Command.enter_section tok;
+| spaces_opt "Section" (coq_token as tok) spaces_opt dot_return
+    { C.enter_section tok;
       main lexbuf}
-| spaces_opt "End" (coq_token as tok) spaces_opt ".\n"
-    { Command.exit_module tok;
+| spaces_opt "End" (coq_token as tok) spaces_opt (dot_return | dot_eof)
+    { C.exit_module tok;
       main lexbuf}
 | spaces_opt as sps
     { nbr_spaces_to_remove := count_spaces sps;
@@ -137,19 +127,24 @@ and elim_comment n cont = parse
 
 and treat_command = parse
 | "short:" space* (ident as id) space* "*)"
-    { short_name := SNSome id;
+    { C.set_short_name (C.SNSome id);
       main lexbuf}
 | "short" space* "*)"
-    { short_name := SNShort;
+    { C.set_short_name C.SNShort;
       main lexbuf}
 | "super short:" space* (tex_ident as id) space* "*)"
-    { super_short_name := Some id;
+    { C.set_super_short_name (C.SNSome id);
+      main lexbuf}
+| "super short" space* "*)"
+    { C.set_super_short_name C.SNShort;
       main lexbuf}
 
 and treat_def = parse
 | (start_definition as start) (spaces as sp) (ident as id)
-    { Printf.printf "*%s*%s|%s|" start sp id;
-      current_def := id;
+    { C.set_current_ident id;
+      C.keyword start;
+      C.spaces (count_spaces sp);
+      C.defined id;
       if start = "Inductive" then is_inductive := true;
       treat_content_def lexbuf}
 | ""
@@ -157,28 +152,28 @@ and treat_def = parse
 
 and treat_content_def = parse
 | '|' (spaces_opt as sp) (ident as tok)
-    { Printf.printf "|";
-      Command.spaces (count_spaces sp);
-      Command.myprintf "/%s/" tok;
+    { C.normal "|";
+      C.spaces (count_spaces sp);
+      C.normal tok;
       if !is_inductive then
         Queue.push tok constructors;
       treat_content_def lexbuf}
 | coq_token as tok
-    { Printf.printf "/%s/" tok;
+    { C.normal tok;
       treat_content_def lexbuf}
 | spaces_opt '\n' (spaces_opt as sp)
-    { Command.newline ();
-      Command.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
+    { C.new_line ();
+      C.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
       treat_content_def lexbuf}
 | spaces as sp
-    { Command.spaces (count_spaces sp);
+    { C.spaces (count_spaces sp);
       treat_content_def lexbuf}
 | dot
-    { Printf.printf ".\n";
+    { C.normal ".";
       conclude_def ();
       main lexbuf}
 | '.' eof
-    { Printf.printf ".\n";
+    { C.normal ".";
       conclude_def ()}
 | "(*"
     {elim_comment 1 treat_content_def lexbuf}
@@ -199,6 +194,52 @@ and elim_phrase =  parse
 
 
 {
-  let () =
-    main (from_channel (open_in (Sys.argv.(1))))
+
+let list_of_file_in_dir dir_name =
+  let handle = Unix.opendir dir_name in
+  let rec aux () = (* yeah, it's not tail rec. whatever *)
+    try
+      let hd = Unix.readdir handle in
+      hd :: aux ()
+    with
+    | End_of_file -> [] in
+  let res = aux () in
+  Unix.closedir handle;
+  res
+
+let is_coq_file name = 
+  Filename.check_suffix name ".v"
+
+let coq_files_in_dir dir_name =
+  List.filter is_coq_file (list_of_file_in_dir dir_name)
+
+let dirs = Queue.create ()
+let files = Queue.create ()
+
+let () = 
+  Arg.parse
+    [("-o", Arg.String (fun out -> Command.out_channel := open_out out),
+      "The output file")]
+    (fun anon ->
+      if is_coq_file anon then
+        Queue.add anon files
+      else
+        Queue.add anon dirs)
+    "A coq to tex parser. List the files and/or directories to explore";
+  Queue.iter (fun dir ->
+    let dir_name = if dir = "." then "" else dir in
+    let coq_files = coq_files_in_dir dir in
+    List.iter (fun file_name ->
+      Command.set_directory_and_file_name dir_name file_name;
+      let in_chan = open_in (Filename.concat dir_name file_name) in
+      main (from_channel in_chan);
+      close_in in_chan) coq_files
+    ) dirs;
+  Queue.iter (fun file ->
+    let dir_name = Filename.dirname file in
+    let file_name = Filename.basename file in
+    Command.set_directory_and_file_name dir_name file_name;
+    let in_chan = open_in (Filename.concat dir_name file_name) in
+    main (from_channel in_chan);
+    close_in in_chan) files
 }
