@@ -3,6 +3,7 @@ Definition foo coin pan :=
   Definition foo coin pan :=
     blah * coin.
 
+(*c2l* short*)
 Inductive foo bar:Prop :=
 | bar | baz
 |coin: foo.

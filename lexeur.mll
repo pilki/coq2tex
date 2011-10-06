@@ -25,17 +25,24 @@ let is_other_keyword = is_among other_keywords
 let is_keyword =
   is_among (definition_keywords @ other_keywords)
 
+type short_name =
+  | SNNone
+  | SNShort
+  | SNSome of string
+
 let nbr_spaces_to_remove = ref 0
 let current_def = ref ""
-let short_name = ref None
+let short_name = ref SNNone
 let super_short_name = ref None
 let is_inductive = ref false
 let constructors = Queue.create ()
 
 let conclude_def () =
   (match !short_name with
-  | None -> ()
-  | Some sn ->
+  | SNNone -> ()
+  | SNShort -> 
+      Command.def_short_name !current_def !current_def
+  | SNSome sn ->
       Command.def_short_name sn !current_def);
   (match !super_short_name with
   | None -> ()
@@ -43,7 +50,7 @@ let conclude_def () =
       Command.def_super_short_name ssn !current_def);
   Queue.iter (fun constr -> Command.myprintf "Constructor %s (see %s)\n"
                  constr !current_def) constructors;
-  short_name := None;
+  short_name := SNNone;
   super_short_name := None;
   is_inductive := false;
   Queue.clear constructors
@@ -100,6 +107,17 @@ rule main = parse
 | open_command {treat_command lexbuf}
 | "(*" {elim_comment 1 main lexbuf}
 | eof {()}
+| spaces_opt "Module" [^'\n']* ":=" [^'\n']* ".\n"
+    {main lexbuf}
+| spaces_opt "Module" (coq_token as tok) [^'\n' '.']* ".\n"
+    { Command.enter_module tok;
+      main lexbuf}
+| spaces_opt "Section" (coq_token as tok) spaces_opt ".\n"
+    { Command.enter_section tok;
+      main lexbuf}
+| spaces_opt "End" (coq_token as tok) spaces_opt ".\n"
+    { Command.exit_module tok;
+      main lexbuf}
 | spaces_opt as sps
     { nbr_spaces_to_remove := count_spaces sps;
       treat_def lexbuf}
@@ -119,7 +137,10 @@ and elim_comment n cont = parse
 
 and treat_command = parse
 | "short:" space* (ident as id) space* "*)"
-    { short_name := Some id;
+    { short_name := SNSome id;
+      main lexbuf}
+| "short" space* "*)"
+    { short_name := SNShort;
       main lexbuf}
 | "super short:" space* (tex_ident as id) space* "*)"
     { super_short_name := Some id;
