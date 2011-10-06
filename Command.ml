@@ -15,7 +15,7 @@ let prefix_aux () =
   let long_prefix =
     List.fold_left
       (fun prefix (mod_name, is_module) -> 
-        if is_module then sprintf "%s%c%s" prefix Conf.module_sep mod_name else prefix)
+        if is_module then sprintf "%s%s%c" prefix mod_name Conf.module_sep else prefix)
       !prefix_string (List.rev !modules_list) in
   fun name ->
     long_prefix ^ name
@@ -36,14 +36,18 @@ let set_directory_and_file_name dn fn =
         !file_name Conf.file_sep;
   prefix := prefix_aux ()
 
+
 let enter_module module_name =
+(*  Printf.eprintf "Enter module %S\n%!" module_name;*)
   modules_list := (module_name, true) :: !modules_list;
   prefix := prefix_aux ()
 
 let enter_section module_name =
+  Printf.eprintf "Enter section %S\n%!" module_name;
   modules_list := (module_name, false) :: !modules_list
 
 let exit_module module_name =
+(*  Printf.eprintf "Exit module %S\n%!" module_name;*)
   match !modules_list with
   | [] ->
       failwith (sprintf "Exit a module (%s), but no module was open!" module_name)

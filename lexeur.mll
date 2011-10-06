@@ -60,12 +60,12 @@ let spaces_opt = space*
 
 let empty_line = space* '\n'
 
-
+let coq_token_aux = ([^' ' '\t' '\n' '.' '(' '|'] +)
 let coq_token =
-  ([^' ' '\t' '\n' '.' '(' '|'] +)
-| '(' (* to be used where comments are properly delt with *)
+  '(' (* to be used where comments are properly delt with *)
 | '|'
-| (['a'-'z' 'A'-'Z' '_' '0' - '9']+ '.' [^ ' ' '\t' 'n']+) (* something with a dot in it *)
+| coq_token_aux ('.' ('(' [^'*'])?  coq_token_aux)* 
+
 
 let dot = '.' [' ' '\t' '\n']
 
@@ -95,17 +95,22 @@ let body = _ * '.' (' ' | '\t' | '\n')
 rule main = parse
 | empty_line {main lexbuf}
 | open_command {treat_command lexbuf}
-| "(*" {elim_comment 1 main lexbuf}
+| spaces_opt "(*" {elim_comment 1 main lexbuf}
 | eof {()}
-| spaces_opt "Module" [^'\n']* ":=" [^'\n']* dot_return
-    {main lexbuf}
-| spaces_opt "Module" (coq_token as tok) [^'\n' '.']* dot_return
+| spaces_opt "Module" spaces ident spaces_opt ":=" 
+    {elim_phrase lexbuf}
+| spaces_opt "Module" spaces "Type" spaces (ident as tok) 
     { C.enter_module tok;
-      main lexbuf}
-| spaces_opt "Section" (coq_token as tok) spaces_opt dot_return
+      elim_phrase lexbuf}
+
+| spaces_opt "Module" spaces (ident as tok) 
+    { C.enter_module tok;
+      elim_phrase lexbuf}
+
+| spaces_opt "Section" spaces (ident as tok) spaces_opt dot_return
     { C.enter_section tok;
       main lexbuf}
-| spaces_opt "End" (coq_token as tok) spaces_opt (dot_return | dot_eof)
+| spaces_opt "End" spaces_opt (coq_token as tok) spaces_opt (dot_return | dot_eof)
     { C.exit_module tok;
       main lexbuf}
 | spaces_opt as sps
