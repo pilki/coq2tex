@@ -60,17 +60,22 @@ let spaces_opt = space*
 
 let empty_line = space* '\n'
 
-let coq_token_aux = ([^' ' '\t' '\n' '.' '(' '|'] +)
+let coq_token_aux = ([^' ' '\t' '\n' '.' '(' '|' ';' '{' '}' ':'] +)
 let coq_token =
   '(' (* to be used where comments are properly delt with *)
 | '|'
+| ';'
+| '{'
+| '}'
+| ":="
+| ':'
 | coq_token_aux ('.' ('(' [^'*'])?  coq_token_aux)* 
 
 
 let dot = '.' [' ' '\t' '\n']
 
 let ident =
-  ['a'-'z' 'A'-'Z' '_']+ ['a'-'z' 'A'-'Z' '_' '0'-'9']*
+  ['a'-'z' 'A'-'Z' '_']+ ['a'-'z' 'A'-'Z' '_' '0'-'9' ''']*
 
 let tex_ident = ['a'-'z' 'A'-'Z']+
 
@@ -81,7 +86,9 @@ let label =
   ['a'-'z' 'A'-'Z' '_'  '-' ':' '0'-'9']+
 
 let start_definition =
-  ("Program" ' '+)? ("Axiome"| "Parameter"| "Definition"| "Theorem"| "Lemma"| "Remark"| "Fixpoint"| "Function" | "Instance" | "Inductive" | "Record")
+  ("Program" ' '+)? ("Axiome"| "Parameter"| "Definition"
+  | "Theorem"| "Lemma"| "Remark"| "Fixpoint"
+  | "Function" | "Instance" | "Inductive")
 
 let open_command = "(*c2l* "
 
@@ -130,6 +137,24 @@ and elim_comment n cont = parse
 | '*' { elim_comment n cont lexbuf}
 | '(' { elim_comment n cont lexbuf}
 
+and keep_comment cont = parse
+| "*)"
+    { C.normal "*)";
+      cont lexbuf}
+| "(*"
+    { failwith "Kept comments can't be nested"}
+| ([^ '*' '('] *) as content
+    { C.normal content;
+      keep_comment cont lexbuf}
+| ('"' [^ '"']* '"') as content
+    { (* '"' this comment is here only to come back to proper syntax coloration*)
+      C.normal content;
+      keep_comment cont lexbuf }
+| '*' { C.normal "*";
+        keep_comment cont lexbuf}
+| '(' { C.normal "(";
+        keep_comment cont lexbuf}
+
 and treat_command = parse
 | "short:" space* (ident as id) space* "*)"
     { C.set_short_name (C.SNSome id);
@@ -152,9 +177,71 @@ and treat_def = parse
       C.defined id;
       if start = "Inductive" then is_inductive := true;
       treat_content_def lexbuf}
+| "Record" (spaces as sp) (ident as id)
+    { C.set_current_ident id;
+      C.keyword "Record";
+      C.spaces (count_spaces sp);
+      C.defined id;
+      treat_record_end_of_line false lexbuf}
 | ""
     { elim_phrase lexbuf }
 
+and treat_record_end_of_line seen_def = parse
+| '{'
+    { C.normal "{";
+      if seen_def then
+        treat_record_start_of_line lexbuf
+      else 
+        treat_record_end_of_line false lexbuf}
+| '}' spaces_opt dot
+    { C.normal "}.";
+      assert seen_def;
+      conclude_def ();
+      main lexbuf
+    }
+| ';'
+    { C.normal ";";
+      assert seen_def;
+      treat_record_start_of_line lexbuf}
+| coq_token as tok
+    { C.normal tok;
+      treat_record_end_of_line (if tok = ":=" then true else seen_def) lexbuf}
+| (spaces_opt '\n')+ (spaces_opt as sp)
+    { C.new_line ();
+      C.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
+      treat_record_end_of_line seen_def lexbuf}
+| spaces as sp
+    { C.spaces (count_spaces sp);
+      treat_record_end_of_line seen_def lexbuf}
+| "(**" ('r'?)
+    { C.normal "(*";
+      keep_comment (treat_record_end_of_line seen_def) lexbuf}
+| "(*"
+    {elim_comment 1 (treat_record_end_of_line seen_def) lexbuf}
+
+and treat_record_start_of_line = parse
+| (spaces_opt '\n')+ (spaces_opt as sp)
+    { C.new_line ();
+      C.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
+      treat_record_start_of_line lexbuf}
+| (spaces_opt as sp) (ident as tok)
+    { C.spaces (count_spaces sp);
+      C.normal tok;
+      Queue.push tok constructors;
+      treat_record_end_of_line true lexbuf}
+| (spaces_opt as sp) '}' spaces_opt dot
+    { C.spaces (count_spaces sp);
+      C.normal "}.";
+      conclude_def ();
+      main lexbuf
+    }
+| (spaces_opt as sp) "(**" ('r'?)
+    { C.spaces (count_spaces sp);
+      C.normal "(*";
+      keep_comment treat_record_start_of_line lexbuf}
+| spaces_opt "(*"
+    {elim_comment 1 treat_record_start_of_line lexbuf}
+      
 and treat_content_def = parse
 | '|' (spaces_opt as sp) (ident as tok)
     { C.normal "|";
@@ -171,7 +258,7 @@ and treat_content_def = parse
 | coq_token as tok
     { C.normal tok;
       treat_content_def lexbuf}
-| spaces_opt '\n' (spaces_opt as sp)
+| (spaces_opt '\n')+ (spaces_opt as sp)
     { C.new_line ();
       C.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
       treat_content_def lexbuf}
@@ -185,6 +272,9 @@ and treat_content_def = parse
 | '.' eof
     { C.normal ".";
       conclude_def ()}
+| "(**" ('r'?)
+    { C.normal "(*";
+      keep_comment treat_content_def lexbuf}
 | "(*"
     {elim_comment 1 treat_content_def lexbuf}
 
@@ -208,16 +298,7 @@ and elim_phrase =  parse
 {
 
 let list_of_file_in_dir dir_name =
-  let handle = Unix.opendir dir_name in
-  let rec aux () = (* yeah, it's not tail rec. whatever *)
-    try
-      let hd = Unix.readdir handle in
-      hd :: aux ()
-    with
-    | End_of_file -> [] in
-  let res = aux () in
-  Unix.closedir handle;
-  res
+  Array.to_list (Sys.readdir dir_name)
 
 let is_coq_file name = 
   Filename.check_suffix name ".v"
@@ -244,6 +325,7 @@ let () =
     List.iter (fun file_name ->
       Command.set_directory_and_file_name dir_name file_name;
       let in_chan = open_in (Filename.concat dir_name file_name) in
+      Command.modules_list := [];
       main (from_channel in_chan);
       close_in in_chan) coq_files
     ) dirs;
@@ -252,6 +334,7 @@ let () =
     let file_name = Filename.basename file in
     Command.set_directory_and_file_name dir_name file_name;
     let in_chan = open_in (Filename.concat dir_name file_name) in
+    Command.modules_list := [];
     main (from_channel in_chan);
     close_in in_chan) files
 }
