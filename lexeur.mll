@@ -69,6 +69,7 @@ let coq_token =
 | '}'
 | ":="
 | ':'
+| ".." '.'?
 | coq_token_aux ('.' ('(' [^'*'])?  coq_token_aux)* 
 
 
@@ -311,8 +312,11 @@ let files = Queue.create ()
 
 let () = 
   Arg.parse
-    [("-o", Arg.String (fun out -> Command.out_channel := open_out out),
-      "The output file")]
+    [("-o", Arg.String (fun out -> Command.out_channel := 
+                          open_out_gen [Open_text; Open_append] 666 out),
+      "The output file (append at the end)");
+     ("-O", Arg.String (fun out -> Command.out_channel := open_out out),
+      "The output file (overwrite it)")]
     (fun anon ->
       if is_coq_file anon then
         Queue.add anon files
