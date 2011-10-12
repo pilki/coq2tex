@@ -36,7 +36,9 @@ let constructors = Queue.create ()
 
 let conclude_def () =
   Queue.iter
-    (fun constr -> C.indexSee constr !C.current_ident)
+    (fun constr -> 
+      C.defineIdent (!C.prefix constr) constr;
+      C.indexSee constr !C.current_ident)
     constructors;
   Queue.clear constructors;
   C.conclude_def ()

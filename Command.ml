@@ -61,6 +61,7 @@ let exit_module module_name =
 
 let main_def_buffer = Buffer.create 2048
 let extra_def_buffer = Buffer.create 2048
+let ident_def_buffer = Buffer.create 2048
 
 
 let spaces n = 
@@ -73,8 +74,13 @@ let normal s =
   Conf.b_normal main_def_buffer s
 let defined s =
   Conf.b_defined main_def_buffer s
+
 let indexSee def see =
-  Conf.b_indexSee extra_def_buffer def see
+  Conf.b_indexSee extra_def_buffer
+    def (!prefix def) (!prefix see)
+
+let defineIdent long_name ident =
+  Conf.b_defineIdent ident_def_buffer long_name ident
 
 
 type short_name =
@@ -100,10 +106,13 @@ let short_to_id = function
 let conclude_def () =
   Conf.p_def !out_channel (!prefix !current_ident) !current_ident
     (Buffer.contents main_def_buffer) (Buffer.contents extra_def_buffer)
+    (Buffer.contents ident_def_buffer)
     (short_to_id !short_name) (short_to_id !super_short_name);
   (* clean up every mutable state *)
   current_ident := "";
   short_name := SNNone;
   super_short_name := SNNone;
   Buffer.clear main_def_buffer;
-  Buffer.clear extra_def_buffer
+  Buffer.clear extra_def_buffer;
+  Buffer.clear ident_def_buffer
+  
