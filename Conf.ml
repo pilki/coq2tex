@@ -46,7 +46,10 @@ let p_def out_chan long_name ident main_def extra_def ident_def short_name super
   (match short_name with
   | None -> ()
   | Some sn ->
-      fprintf out_chan "\\SaveVerb{__CTT__IDENT%s}§%s§\n" sn ident);
+      fprintf out_chan
+      "\\CTTDefineShortDef{%s}{%s}"sn long_name;
+      fprintf out_chan
+        "\\SaveVerb{__CTT__IDENT%s}§%s§\n" sn ident);
   (match super_short_name with
   | None -> ()
   | Some sn ->

@@ -41,6 +41,7 @@ let conclude_def () =
       C.indexSee constr !C.current_ident)
     constructors;
   Queue.clear constructors;
+  is_inductive := false;
   C.conclude_def ()
 
 let count_spaces s =
@@ -93,7 +94,7 @@ let start_definition =
   | "Theorem"| "Lemma"| "Remark"| "Fixpoint"
   | "Function" | "Instance" | "Inductive")
 
-let open_command = "(*c2l* "
+let open_command = "(*c2l* " | "(*c2t* "
 
 let dot_return = '.' spaces_opt '\n'
 let dot_eof = '.' spaces_opt eof
@@ -104,8 +105,8 @@ let body = _ * '.' (' ' | '\t' | '\n')
 
 rule main = parse
 | empty_line {main lexbuf}
-| open_command {treat_command lexbuf}
-| spaces_opt "(*" {elim_comment 1 main lexbuf}
+| spaces_opt open_command {treat_command lexbuf}
+| spaces_opt "(*" {elim_comment 1 main false lexbuf}
 | eof {()}
 | spaces_opt "Module" spaces ident spaces_opt ":=" 
     {elim_phrase lexbuf}
@@ -127,19 +128,25 @@ rule main = parse
     { nbr_spaces_to_remove := count_spaces sps;
       treat_def lexbuf}
 
-and elim_comment n cont = parse
+and elim_comment n cont also_new_lines = parse
 | "*)"
-    { if n = 1 then cont lexbuf else elim_comment (pred n) cont lexbuf}
+    { if n = 1 then
+        (if also_new_lines then elim_newlines cont else cont) lexbuf
+      else
+        elim_comment (pred n) cont also_new_lines lexbuf}
 | "(*"
-    { elim_comment (succ n) cont lexbuf}
+    { elim_comment (succ n) cont also_new_lines lexbuf}
 | [^ '*' '('] *
-    { elim_comment n cont lexbuf}
+    { elim_comment n cont also_new_lines lexbuf}
 | '"' [^ '"']* '"'
     { (* '"' this comment is here only to come back to proper syntax coloration*)
-      elim_comment n cont lexbuf }
-| '*' { elim_comment n cont lexbuf}
-| '(' { elim_comment n cont lexbuf}
-
+      elim_comment n cont also_new_lines lexbuf }
+| '*' { elim_comment n cont also_new_lines lexbuf}
+| '(' { elim_comment n cont also_new_lines lexbuf}
+and elim_newlines cont = parse
+| (spaces_opt '\n')* (spaces_opt as sp)
+    { C.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
+      cont lexbuf}
 and keep_comment cont = parse
 | "*)"
     { C.normal "*)";
@@ -219,8 +226,13 @@ and treat_record_end_of_line seen_def = parse
 | "(**" ('r'?)
     { C.normal "(*";
       keep_comment (treat_record_end_of_line seen_def) lexbuf}
-| "(*"
-    {elim_comment 1 (treat_record_end_of_line seen_def) lexbuf}
+| (((spaces_opt '\n')* spaces_opt) as sp) "(*"
+    { if sp = "" then 
+        elim_comment 1 (treat_record_end_of_line seen_def) false lexbuf
+      else
+      ( C.new_line ();
+        elim_comment 1 (treat_record_end_of_line seen_def) true lexbuf)
+    }
 
 and treat_record_start_of_line = parse
 | (spaces_opt '\n')+ (spaces_opt as sp)
@@ -242,8 +254,13 @@ and treat_record_start_of_line = parse
     { C.spaces (count_spaces sp);
       C.normal "(*";
       keep_comment treat_record_start_of_line lexbuf}
-| spaces_opt "(*"
-    {elim_comment 1 treat_record_start_of_line lexbuf}
+| (((spaces_opt '\n')* spaces_opt) as sp) "(*"
+    { if sp = "" then 
+        elim_comment 1 treat_record_start_of_line false lexbuf
+      else
+      ( C.new_line ();
+        elim_comment 1 treat_record_start_of_line true lexbuf)
+    }
       
 and treat_content_def = parse
 | '|' (spaces_opt as sp) (ident as tok)
@@ -278,8 +295,13 @@ and treat_content_def = parse
 | "(**" ('r'?)
     { C.normal "(*";
       keep_comment treat_content_def lexbuf}
-| "(*"
-    {elim_comment 1 treat_content_def lexbuf}
+| (((spaces_opt '\n')* spaces_opt) as sp) "(*"
+    { if sp = "" then 
+        elim_comment 1 treat_content_def false lexbuf
+      else
+      ( C.new_line ();
+        elim_comment 1 treat_content_def true lexbuf)
+    }
 
 and elim_phrase =  parse
 | coq_token
@@ -295,7 +317,7 @@ and elim_phrase =  parse
 | '.' eof
     { () }
 | "(*"
-    {elim_comment 1 elim_phrase lexbuf}
+    {elim_comment 1 elim_phrase false lexbuf}
 
 
 {
