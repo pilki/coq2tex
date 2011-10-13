@@ -25,13 +25,23 @@ let b_defined buf s = bprintf buf "%s"s
 let b_normal buf s = bprintf buf "%s"s
 let b_newline buf = bprintf buf "%s""\n"
 let b_spaces buf n = bprintf buf "%s" (String.make n ' ')
-let b_indexDef buf def = bprintf buf "\\indexDef{%s}\n" def
+let b_indexDef buf def = bprintf buf "\\indexCoqDef{%s}\n" def
 let b_indexSee buf ident long_name_def long_name_see =
-  bprintf buf "\\indexSee{%s@\\CTTIdent*{%s}}{\\CTTIdent*{%s}}\n"
+  bprintf buf "\\indexCoqSee{%s@\\CTTIdent*{%s}}{\\CTTIdent*{%s}}\n"
     (strip__ ident) long_name_def long_name_see
 
 let b_defineIdent buf long_name ident =
   bprintf buf "\\SaveVerb{__CTT__IDENT%s}§%s§\n" long_name ident
+let b_def_short_def buf long_name short_name = 
+  bprintf buf "\\CTTDefineShortDef{%s}{%s}\n" short_name long_name
+
+
+let p_def_ident out_chan long_name ident = 
+    fprintf out_chan "\\SaveVerb{__CTT__IDENT%s}§%s§\n" long_name ident
+
+let p_def_short_def out_chan long_name short_name = 
+  fprintf out_chan "\\CTTDefineShortDef{%s}{%s}\n" short_name long_name
+
 
 
 let p_def out_chan long_name ident main_def extra_def ident_def short_name super_short_name =
@@ -46,10 +56,8 @@ let p_def out_chan long_name ident main_def extra_def ident_def short_name super
   (match short_name with
   | None -> ()
   | Some sn ->
-      fprintf out_chan
-      "\\CTTDefineShortDef{%s}{%s}"sn long_name;
-      fprintf out_chan
-        "\\SaveVerb{__CTT__IDENT%s}§%s§\n" sn ident);
+      p_def_short_def out_chan long_name sn;
+      p_def_ident out_chan sn ident);
   (match super_short_name with
   | None -> ()
   | Some sn ->

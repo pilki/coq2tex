@@ -39,11 +39,13 @@ let set_directory_and_file_name dn fn =
 
 let enter_module module_name =
 (*  Printf.eprintf "Enter module %S\n%!" module_name;*)
+  Conf.p_def_ident !out_channel (!prefix module_name) module_name;
   modules_list := (module_name, true) :: !modules_list;
   prefix := prefix_aux ()
 
 let enter_section module_name =
 (*  Printf.eprintf "Enter section %S\n%!" module_name;*)
+  Conf.p_def_ident !out_channel (!prefix module_name) module_name;
   modules_list := (module_name, false) :: !modules_list
 
 let exit_module module_name =
@@ -81,6 +83,9 @@ let indexSee def see =
 
 let defineIdent long_name ident =
   Conf.b_defineIdent ident_def_buffer long_name ident
+
+let def_short_def long_name short_name = 
+  Conf.b_def_short_def ident_def_buffer long_name short_name
 
 
 type short_name =

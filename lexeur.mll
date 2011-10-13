@@ -38,7 +38,10 @@ let conclude_def () =
   Queue.iter
     (fun constr -> 
       C.defineIdent (!C.prefix constr) constr;
-      C.indexSee constr !C.current_ident)
+      C.indexSee constr !C.current_ident;
+      if !C.short_name = C.SNShort then
+        C.defineIdent constr constr
+    )
     constructors;
   Queue.clear constructors;
   is_inductive := false;
