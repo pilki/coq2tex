@@ -14,7 +14,7 @@ let is_among words =
 let definition_keywords =
   ["Axiome"; "Parameter"; "Definition"; "Theorem";
    "Lemma"; "Remark"; "Fixpoint"; "Function"; "Notation";
-   "Inductive"; "Record"]
+   "Inductive"; "Record"; "Declare Instance"]
 
 let program_str = "Program"
 
@@ -95,7 +95,7 @@ let label =
 let start_definition =
   ("Program" ' '+)? ("Axiome"| "Parameter"| "Definition"
   | "Theorem"| "Lemma"| "Remark"| "Fixpoint"
-  | "Function" | "Instance" | "Inductive")
+  | "Function" | "Instance" | "Inductive" |("Declare" spaces "Instance"))
 
 let open_command = "(*c2l* " | "(*c2t* "
 
@@ -124,7 +124,7 @@ rule main = parse
 | spaces_opt "Section" spaces (ident as tok) spaces_opt dot_return
     { C.enter_section tok;
       main lexbuf}
-| spaces_opt "End" spaces_opt (coq_token as tok) spaces_opt (dot_return | dot_eof)
+| spaces_opt "End" spaces (coq_token as tok) spaces_opt (dot_return | dot_eof)
     { C.exit_module tok;
       main lexbuf}
 | spaces_opt as sps
@@ -156,7 +156,7 @@ and keep_comment cont = parse
       cont lexbuf}
 | "(*"
     { failwith "Kept comments can't be nested"}
-| ([^ '*' '('] *) as content
+| ([^ '*' '(' '\n'] *) as content
     { C.normal content;
       keep_comment cont lexbuf}
 | ('"' [^ '"']* '"') as content
@@ -167,6 +167,10 @@ and keep_comment cont = parse
         keep_comment cont lexbuf}
 | '(' { C.normal "(";
         keep_comment cont lexbuf}
+| (spaces_opt '\n') (spaces_opt as sp)
+    { C.new_line ();
+      C.spaces (max 0 (count_spaces sp - !nbr_spaces_to_remove));
+      keep_comment cont lexbuf}
 
 and treat_command = parse
 | "short:" space* (ident as id) space* "*)"
@@ -229,7 +233,7 @@ and treat_record_end_of_line seen_def = parse
 | "(**" ('r'?)
     { C.normal "(*";
       keep_comment (treat_record_end_of_line seen_def) lexbuf}
-| (((spaces_opt '\n')* spaces_opt) as sp) "(*"
+| (((spaces_opt '\n')* spaces_opt) as sp) "(*" [^'*']
     { if sp = "" then 
         elim_comment 1 (treat_record_end_of_line seen_def) false lexbuf
       else
@@ -257,7 +261,7 @@ and treat_record_start_of_line = parse
     { C.spaces (count_spaces sp);
       C.normal "(*";
       keep_comment treat_record_start_of_line lexbuf}
-| (((spaces_opt '\n')* spaces_opt) as sp) "(*"
+| (((spaces_opt '\n')* spaces_opt) as sp) "(*" [^'*']
     { if sp = "" then 
         elim_comment 1 treat_record_start_of_line false lexbuf
       else
@@ -298,7 +302,7 @@ and treat_content_def = parse
 | "(**" ('r'?)
     { C.normal "(*";
       keep_comment treat_content_def lexbuf}
-| (((spaces_opt '\n')* spaces_opt) as sp) "(*"
+| (((spaces_opt '\n')* spaces_opt) as sp) "(*" [^'*']
     { if sp = "" then 
         elim_comment 1 treat_content_def false lexbuf
       else
